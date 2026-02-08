@@ -23,16 +23,15 @@ class AccountsService:
         except ValueError:
             return 0.0
 
-    def save_entry(self, amount_str, currency, service, username, recurring, description):
-        """Saves the complete record with all 6 categories to Supabase."""
-        amount = self.parse_brazilian_number(amount_str)
+    def save_entry(self, amount, currency, service, description, username="Charles", recurring=False):
+        """Saves a new entry with the 'service' field included."""
         data = {
-            "amount": amount,
+            "amount": self.parse_brazilian_number(amount),
             "currency": currency,
-            "service": service,
+            "service": service,        # <--- New field added here
+            "description": description,
             "username": username,
-            "recurring_billing": recurring,
-            "description": description
+            "is_recurring": recurring
         }
         return self.supabase.table("accounts").insert(data).execute()
 

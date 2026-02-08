@@ -1,139 +1,107 @@
 from nicegui import ui
 from accounts_service import accounts_service
 
-# --- 1. Helper Functions ---
-def format_currency(value, currency):
-    """Formats numbers to localized Brazilian or US styles."""
-    if currency == 'BRL':
-        return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-    return f"$ {value:,.2f}"
+class FinanceApp:
+    def __init__(self):
+        self.m_brl = None
+        self.a_brl = None
+        self.m_usd = None
+        self.a_usd = None
+        self.service_input = None
+        self.amount_input = None
+        self.currency_input = None
+        self.desc_input = None
+        self.recurring_check = None
+        self.cloud_status = None
 
-@ui.page('/')
-def index():
-    # --- 2. State & Data Handling ---
-    dark = ui.dark_mode()
-    all_rows = []  # Local cache for searching
+    def format_display(self, value, currency):
+        if currency == 'BRL':
+            return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"$ {value:,.2f}"
 
-    def refresh_all():
-        """Top-level refresh for stats and the table list."""
-        nonlocal all_rows
+    def refresh_dashboard(self):
         try:
-            # Update Dashboard Totals
             stats = accounts_service.get_financial_summary()
-            m_brl.set_text(f"Monthly: {format_currency(stats['BRL']['monthly'], 'BRL')}")
-            a_brl.set_text(f"Annual: {format_currency(stats['BRL']['annual'], 'BRL')}")
-            m_usd.set_text(f"Monthly: {format_currency(stats['USD']['monthly'], 'USD')}")
-            a_usd.set_text(f"Annual: {format_currency(stats['USD']['annual'], 'USD')}")
+            self.m_brl.set_text(f"Monthly: {self.format_display(stats['BRL']['monthly'], 'BRL')}")
+            self.a_brl.set_text(f"Annual: {self.format_display(stats['BRL']['annual'], 'BRL')}")
+            self.m_usd.set_text(f"Monthly: {self.format_display(stats['USD']['monthly'], 'USD')}")
+            self.a_usd.set_text(f"Annual: {self.format_display(stats['USD']['annual'], 'USD')}")
             
-            # Update Cloud Status
-            cloud_status.set_text('Cloud: Online')
-            cloud_status.classes('text-green-500', remove='text-red-500')
-            
-            # Update Search Grid
-            all_rows = accounts_service.fetch_all_records()
-            update_grid_filter()
+            # Corrected icon update logic
+            self.cloud_status.props('name=cloud') 
+            self.cloud_status.classes(replace='text-green-500')
         except Exception as e:
-            cloud_status.set_text('Cloud: Offline')
-            cloud_status.classes('text-red-500', remove='text-green-500')
-            ui.notify(f"Sync Error: {e}", color='negative')
+            self.cloud_status.props('name=cloud_off')
+            self.cloud_status.classes(replace='text-red-500')
+            ui.notify(f"Cloud Offline: {e}", color='negative')
 
-    def update_grid_filter():
-        """Filters the AgGrid rows based on search input."""
-        search_val = search_input.value.lower()
-        filtered = [
-            row for row in all_rows 
-            if search_val in row.get('service', '').lower() 
-            or search_val in row.get('description', '').lower()
-        ]
-        grid.options['rowData'] = filtered
-        grid.update()
+    async def handle_save(self):
+        s_val = self.service_input.value
+        a_val = self.amount_input.value
+        c_val = self.currency_input.value
+        d_val = self.desc_input.value
+        r_val = self.recurring_check.value
 
-    # --- 3. UI: Header Bar ---
-    with ui.row().classes('w-full justify-between items-center mb-4 p-2'):
-        with ui.row().classes('items-center gap-2'):
-            ui.icon('cloud').classes('text-2xl')
-            cloud_status = ui.label('Connecting...').classes('font-bold')
-        
-        with ui.row().classes('items-center gap-2'):
-            ui.button(icon='light_mode', on_click=dark.disable).props('flat round')
-            ui.button(icon='dark_mode', on_click=dark.enable).props('flat round')
+        if not s_val or not a_val:
+            ui.notify('Service and Amount are required!', color='negative')
+            return
 
-    ui.label("Charles Duarte's Accounts").classes('text-h4 mb-4')
-
-    # --- 4. UI: Dashboard Cards ---
-    with ui.row().classes('w-full gap-4 mb-6'):
-        with ui.card().classes('bg-blue-100 dark:bg-blue-900 p-4 flex-1 shadow-sm'):
-            ui.label('🇧🇷 BRL Overview').classes('text-bold text-lg')
-            m_brl = ui.label('Monthly: R$ 0,00')
-            a_brl = ui.label('Annual: R$ 0,00')
-        
-        with ui.card().classes('bg-green-100 dark:bg-green-900 p-4 flex-1 shadow-sm'):
-            ui.label('🇺🇸 USD Overview').classes('text-bold text-lg')
-            m_usd = ui.label('Monthly: $ 0.00')
-            a_usd = ui.label('Annual: $ 0.00')
-
-    # --- 5. UI: Search and Table ---
-    with ui.card().classes('w-full mb-6 p-4'):
-        with ui.row().classes('w-full items-center gap-4'):
-            search_input = ui.input(label='Filter Service or Details', on_change=update_grid_filter) \
-                .props('outlined icon=search').classes('flex-grow')
-            ui.button(icon='refresh', on_click=refresh_all).props('flat color=primary')
-
-        grid = ui.aggrid({
-            'columnDefs': [
-                {'headerName': 'Service', 'field': 'service', 'sortable': True},
-                {'headerName': 'Amount', 'field': 'amount', 'width': 100},
-                {'headerName': 'Currency', 'field': 'currency', 'width': 90},
-                {'headerName': 'User', 'field': 'username', 'width': 120},
-                {'headerName': 'Date', 'field': 'created_at', 'width': 150},
-                {'headerName': 'Recurr.', 'field': 'recurring_billing', 'width': 90},
-            ],
-            'rowData': [],
-            'pagination': True,
-            'paginationPageSize': 5
-        }).classes('w-full h-64 mt-2')
-
-    # --- 6. UI: Entry Form ---
-    with ui.card().classes('w-full p-6 shadow-lg'):
-        ui.label('Add New Record').classes('text-xl font-bold mb-4')
-        
-        with ui.row().classes('w-full gap-4'):
-            service_in = ui.input(label='Service Name').classes('flex-grow')
-            user_in = ui.input(label='Username/Account').classes('flex-grow')
-            recurr_in = ui.checkbox('Recurring')
-
-        with ui.row().classes('w-full items-start gap-4 mt-2'):
-            amount_in = ui.input(label='Amount (0,00)').classes('w-40')
-            curr_in = ui.select(['BRL', 'USD'], value='BRL', label='Currency').classes('w-32')
-            desc_in = ui.input(label='Notes').classes('flex-grow')
-        
-        async def handle_save():
-            if not amount_in.value or not service_in.value:
-                ui.notify("Error: Amount and Service are required", color='negative')
-                return
+        try:
+            # Username is handled here, hidden from the UI
+            accounts_service.save_entry(
+                amount=a_val,
+                currency=c_val,
+                service=s_val,
+                description=d_val,
+                username="Charles Duarte", 
+                recurring=r_val
+            )
+            ui.notify(f"✅ Synced: {s_val}", color='positive')
             
-            try:
-                accounts_service.save_entry(
-                    amount_in.value, curr_in.value, service_in.value, 
-                    user_in.value, recurr_in.value, desc_in.value
-                )
-                ui.notify(f"Successfully saved {service_in.value}!", color='positive')
+            self.service_input.value = ''
+            self.amount_input.value = ''
+            self.desc_input.value = ''
+            self.refresh_dashboard()
+            self.service_input.run_method('focus')
+            
+        except Exception as e:
+            ui.notify(f"Sync Failed: {e}", color='negative')
+
+    def build_ui(self):
+        with ui.column().classes('w-full max-w-4xl mx-auto p-4'):
+            with ui.row().classes('w-full items-center justify-between mb-4'):
+                ui.label("Fast Accounts Local").classes('text-h4 text-grey-8')
+                with ui.row().classes('items-center gap-2'):
+                    ui.label('Cloud Status').classes('text-grey-6 text-xs uppercase tracking-wider')
+                    self.cloud_status = ui.icon('cloud', size='md').classes('text-grey-400')
+
+            # --- Dashboard ---
+            with ui.row().classes('w-full gap-4 mb-8'):
+                with ui.card().classes('bg-blue-50 p-4 flex-1 shadow border-l-4 border-blue-400'):
+                    ui.label('🇧🇷 BRL TOTALS').classes('text-bold text-blue-800')
+                    self.m_brl = ui.label('--')
+                    self.a_brl = ui.label('--')
+
+                with ui.card().classes('bg-green-50 p-4 flex-1 shadow border-l-4 border-green-400'):
+                    ui.label('🇺🇸 USD TOTALS').classes('text-bold text-green-800')
+                    self.m_usd = ui.label('--')
+                    self.a_usd = ui.label('--')
+
+            # --- Form ---
+            with ui.card().classes('w-full p-6 shadow-lg'):
+                with ui.row().classes('w-full gap-4'):
+                    self.service_input = ui.input(label='Service').classes('flex-grow')
+                    self.amount_input = ui.input(label='Amount').classes('w-32')
+                    self.currency_input = ui.select(['BRL', 'USD'], value='BRL', label='Currency').classes('w-24')
+
+                self.desc_input = ui.input(label='Description/Notes').classes('w-full mt-2')
                 
-                # Clear Form
-                amount_in.value = ''
-                service_in.value = ''
-                user_in.value = ''
-                desc_in.value = ''
-                recurr_in.value = False
-                
-                # Global Refresh
-                refresh_all()
-            except Exception as e:
-                ui.notify(f"Cloud Save Failed: {e}", color='negative')
+                with ui.row().classes('w-full items-center justify-between mt-6'):
+                    self.recurring_check = ui.checkbox('Recurring')
+                    ui.button('SAVE TO SUPABASE', on_click=self.handle_save).classes('px-10 bg-slate-800 text-white')
 
-        ui.button('Save to Supabase', on_click=handle_save).classes('w-full mt-6 text-lg')
+            self.refresh_dashboard()
 
-    # Initial page load data fetch
-    refresh_all()
-
-ui.run(port=8086, title="Fast Accounts Local", reload=True)
+app = FinanceApp()
+ui.page('/')(app.build_ui)
+ui.run(port=8087, title="Fast Accounts 2026", reload=False)
