@@ -59,4 +59,13 @@ class AccountsService:
 
         return stats
 
+    def fetch_all_records(self):
+        """Retrieves all entries to be displayed in the search table."""
+        try:
+            response = self.supabase.table("accounts").select("*").order('created_at', desc=True).execute()
+            return response.data
+        except Exception as e:
+            print(f"Error fetching: {e}")
+            return []    
+
 accounts_service = AccountsService()
