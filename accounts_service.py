@@ -1,39 +1,62 @@
 import os
-from supabase import create_client, Client
+from datetime import datetime
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
-# Load once at the start of the script
 load_dotenv()
 
-class AccountService:
+class AccountsService:
     def __init__(self):
-        # We fetch the fuel for our machine
-        url: str | None = os.getenv("SUPABASE_URL")
-        key: str | None = os.getenv("SUPABASE_KEY")
-        
-        # Engineering Safety Check (Type Guard)
-        if url is None or key is None:
-            raise ValueError("❌ Critical Error: SUPABASE_URL or KEY is missing from .env!")
-        
-        # Now the machine is initialized and ready to work
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        if not url or not key:
+            raise ValueError("❌ Missing Supabase credentials in .env")
         self.supabase: Client = create_client(url, key)
 
-    def get_all_accounts(self):
-        # RESCUED: Matches your FastAPI GET /accounts/
-        response = self.supabase.table("accounts").select("*").execute()
-        return response.data
+    def parse_brazilian_number(self, value_str: str) -> float:
+        """Converts '1.250,50' into 1250.50 for the database."""
+        if not value_str:
+            return 0.0
+        clean_value = value_str.replace('.', '').replace(',', '.')
+        try:
+            return float(clean_value)
+        except ValueError:
+            return 0.0
 
-    def add_account(self, service, username, billing, payment, currency):
-        # RESCUED: Matches your FastAPI POST /accounts/ logic
+    def save_entry(self, amount_str, currency, service, username, recurring, description):
+        """Saves the complete record with all 6 categories to Supabase."""
+        amount = self.parse_brazilian_number(amount_str)
         data = {
+            "amount": amount,
+            "currency": currency,
             "service": service,
             "username": username,
-            "recurring_billing": billing,
-            "payment_method": payment,
-            "currency": currency
+            "recurring_billing": recurring,
+            "description": description
         }
         return self.supabase.table("accounts").insert(data).execute()
 
-    def delete_account(self, service_name):
-        # RESCUED: Matches your FastAPI DELETE /accounts/{service_name}
-        return self.supabase.table("accounts").delete().eq("service", service_name).execute()
+    def get_financial_summary(self):
+        """Calculates Monthly/Annual totals for BRL and USD."""
+        response = self.supabase.table("accounts").select("amount, currency, created_at").execute()
+        data = response.data
+
+        now = datetime.now()
+        stats = {
+            "BRL": {"monthly": 0.0, "annual": 0.0},
+            "USD": {"monthly": 0.0, "annual": 0.0}
+        }
+
+        for entry in data:
+            dt = datetime.fromisoformat(entry['created_at'].replace('Z', '+00:00'))
+            amount = float(entry['amount'])
+            curr = entry['currency']
+
+            if dt.year == now.year:
+                stats[curr]["annual"] += amount
+                if dt.month == now.month:
+                    stats[curr]["monthly"] += amount
+
+        return stats
+
+accounts_service = AccountsService()
