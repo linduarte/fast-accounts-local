@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+# from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
@@ -7,64 +7,58 @@ load_dotenv()
 
 class AccountsService:
     def __init__(self):
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        if not url or not key:
-            raise ValueError("❌ Missing Supabase credentials in .env")
+        url = os.environ.get("SUPABASE_URL") or ""
+        key = os.environ.get("SUPABASE_KEY") or ""
         self.supabase: Client = create_client(url, key)
 
-    def parse_brazilian_number(self, value_str: str) -> float:
-        """Converts '1.250,50' into 1250.50 for the database."""
-        if not value_str:
-            return 0.0
-        clean_value = value_str.replace('.', '').replace(',', '.')
-        try:
+    def parse_brazilian_number(self, value):
+        if isinstance(value, str):
+            # Converts "1.585,43" to 1585.43
+            clean_value = value.replace('.', '').replace(',', '.')
             return float(clean_value)
-        except ValueError:
-            return 0.0
+        return float(value)
 
-    def save_entry(self, amount, currency, service, description, username="Charles", recurring=False):
-        """Saves a new entry with the 'service' field included."""
+    def get_financial_summary(self):
+        def fetch_sum(recurring_status, curr):
+            # We tell Supabase: "Give me records where currency matches AND is_recurring is True/False"
+            res = self.supabase.table("accounts") \
+                .select("amount") \
+                .eq("currency", curr) \
+                .eq("is_recurring", recurring_status) \
+                .execute()
+
+            # Calculate the sum
+            return sum(item['amount'] for item in res.data)
+
+        return {
+            'BRL': {
+                'monthly': fetch_sum(True, 'BRL'),  # Recurring only
+                'annual': fetch_sum(False, 'BRL')   # Non-recurring only
+            },
+            'USD': {
+                'monthly': fetch_sum(True, 'USD'),  # Recurring only
+                'annual': fetch_sum(False, 'USD')   # Non-recurring only
+            }
+        }
+
+    def save_entry(self, amount, currency, service, description, username, recurring):
         data = {
             "amount": self.parse_brazilian_number(amount),
             "currency": currency,
-            "service": service,        # <--- New field added here
+            "service": service,
             "description": description,
             "username": username,
             "is_recurring": recurring
         }
         return self.supabase.table("accounts").insert(data).execute()
 
-    def get_financial_summary(self):
-        """Calculates Monthly/Annual totals for BRL and USD."""
-        response = self.supabase.table("accounts").select("amount, currency, created_at").execute()
-        data = response.data
+    def search_entries(self, query):
+        """THIS WAS MISSING: The search method for Supabase"""
+        return self.supabase.table("accounts") \
+            .select("*") \
+            .or_(f"service.ilike.%{query}%,description.ilike.%{query}%") \
+            .order("created_at", desc=True) \
+            .execute()
 
-        now = datetime.now()
-        stats = {
-            "BRL": {"monthly": 0.0, "annual": 0.0},
-            "USD": {"monthly": 0.0, "annual": 0.0}
-        }
-
-        for entry in data:
-            dt = datetime.fromisoformat(entry['created_at'].replace('Z', '+00:00'))
-            amount = float(entry['amount'])
-            curr = entry['currency']
-
-            if dt.year == now.year:
-                stats[curr]["annual"] += amount
-                if dt.month == now.month:
-                    stats[curr]["monthly"] += amount
-
-        return stats
-
-    def fetch_all_records(self):
-        """Retrieves all entries to be displayed in the search table."""
-        try:
-            response = self.supabase.table("accounts").select("*").order('created_at', desc=True).execute()
-            return response.data
-        except Exception as e:
-            print(f"Error fetching: {e}")
-            return []    
-
+# Create the instance
 accounts_service = AccountsService()
