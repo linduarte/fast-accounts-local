@@ -1,7 +1,4 @@
-📄 README.md (fast-accounts-local)
 🧾 Fast Accounts Local
-High-Speed Financial Data Management for CNPJs & NFS-e
-
 Lead Engineer: Charles Duarte
 
 Status: Local Production
@@ -9,7 +6,44 @@ Status: Local Production
 🚀 Overview
 Fast Accounts Local is a specialized desktop application designed for the rapid management and processing of accounting data. Built with Python and NiceGUI, it leverages a local-first architecture to ensure that sensitive financial data remains processed on the local machine without exposure to external cloud databases.
 
+
+
+# 🏦 Fast-Accounts-Local v1.2
+
+A streamlined financial dashboard built with **Python**, **NiceGUI**, and **Supabase**. This application allows for quick tracking of recurring expenses versus one-off investments with a cloud-synced backend.
+
+## 🚀 Key Features
+
+* **Smart Totals:** Automatically separates your finances into two distinct buckets:
+  * **Monthly (Fixed):** Sum of all services marked as **Recurring**.
+  * **Annual (Variable):** Sum of all entries **not** marked as recurring.
+* **Search Resource:** High-speed search bar with "Click-to-Edit" functionality to quickly update existing service values.
+* **Cloud Sync:** Real-time synchronization with Supabase for data persistence.
+* **Dual Currency:** Native support for **BRL (R$)** and **USD ($)** with Brazilian number formatting (comma decimal).
+
+## 🛠️ Tech Stack
+
+* **Frontend:** [NiceGUI](https://nicegui.io/) (Python-based UI framework)
+* **Backend:** [Supabase](https://supabase.com/) (PostgreSQL & API)
+* **Environment:** [uv](https://github.com/astral-sh/uv) (Fast Python package manager)
+
+## 📋## 🏃 How to Run
+
+To launch the application, open your terminal in the project folder and run:
+
+```env
+uv run main.py
+```
+
+The app will be available at `http://localhost:8087`.
+
 📂 Project Structure
+
+- `main.py`: The UI layer and application state. Handles rendering and user interaction.
+
+- `accounts_service.py`: The logic layer. Manages data formatting, Supabase queries, and financial calculations.
+
+- `.env`: Sensitive credentials (ignored by git).
 
 ```plaintext
 fast-accounts-local/
@@ -32,22 +66,10 @@ load_dotenv()
 
 class AccountsService:
     def __init__(self):
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        if not url or not key:
-            raise ValueError("❌ Missing Supabase credentials in .env")
+        url = os.environ.get("SUPABASE_URL") or ""
+        key = os.environ.get("SUPABASE_KEY") or ""
         self.supabase: Client = create_client(url, key)
-
-    def fetch_accounts(self):
-        """Example: Get all records from your table."""
-        return self.supabase.table("accounts").select("*").execute()
-
-    def add_entry(self, data: dict):
-        """Example: Insert a new financial record."""
-        return self.supabase.table("accounts").insert(data).execute()
-
-# Create a single instance to be used by the app
-accounts_service = AccountsService()
+... code continue
 ```
 
 ### 🛠️ 2. The Main UI (`main.py`)
@@ -55,27 +77,45 @@ accounts_service = AccountsService()
 Your UI now simply "asks" the service for data, keeping the file clean and focused on the user experience.
 
 ```python
-from nicegui import ui
 from accounts_service import accounts_service
+from nicegui import ui
 
-@ui.page('/')
-def index():
-    ui.label("Charles Duarte's Fast Accounts").classes('text-h4')
-    
-    async def load_data():
+
+class FinanceApp:
+    def __init__(self):
+        self.m_brl = None
+        self.a_brl = None
+        self.m_usd = None
+        self.a_usd = None
+        self.servic... code continuee_input = None
+        self.amount_input = None
+        self.currency_input = None
+        self.desc_input = None
+        self.recurring_check = None
+        self.cloud_status = None
+
+    def format_display(self, value, currency):
+        if currency == 'BRL':
+            return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"$ {value:,.2f}"
+
+    def refresh_dashboard(self):
         try:
-            response = accounts_service.fetch_accounts()
-            ui.notify(f"Loaded {len(response.data)} records")
-            # Render your table/cards here...
+            stats = accounts_service.get_financial_summary()
+            self.m_brl.set_text(f"Monthly: {self.format_display(stats['BRL']['monthly'], 'BRL')}")
+            self.a_brl.set_text(f"Annual: {self.format_display(stats['BRL']['annual'], 'BRL')}")
+            self.m_usd.set_text(f"Monthly: {self.format_display(stats['USD']['monthly'], 'USD')}")
+            self.a_usd.set_text(f"Annual: {self.format_display(stats['USD']['annual'], 'USD')}")
+            
+            # Corrected icon update logic
+            self.cloud_status.props('name=cloud') 
+            self.cloud_status.classes(replace='text-green-500')
         except Exception as e:
-            ui.notify(f"Error: {e}", color='negative')
-
-    ui.button('Sync with Supabase', on_click=load_data)
-
-ui.run(port=8086) # Using 8086 to avoid conflict with Git Guardian
+            self.cloud_status.props('name=cloud_off')
+            self.cloud_status.classes(replace='text-red-500')
+            ui.notify(f"Clo... code continued Offline: {e}", color='negative')
+... code continue
 ```
-
-### 🛠️ 3. The Security Guard (`.gitignore`)
 
 Since we deleted the `data` folder, we want to make sure no other artifacts sneak into your GitHub repo.
 
@@ -99,5 +139,3 @@ supabase/
 - **Security:** Your `.env` holds the keys, and your `.gitignore` hides the `.env`.
 
 - **Simplicity:** No more `data` folder means no more messy CSV exports. Your "Single Source of Truth" is now in the cloud.
-
-**Charles, since we're using Supabase now, would you like me to help you draft the SQL command to create your first 'accounts' table with the correct columns for CNPJ and NFS-e?**
