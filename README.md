@@ -139,3 +139,49 @@ supabase/
 - **Security:** Your `.env` holds the keys, and your `.gitignore` hides the `.env`.
 
 - **Simplicity:** No more `data` folder means no more messy CSV exports. Your "Single Source of Truth" is now in the cloud.
+
+---
+
+This message received from Supabase make this below process to avoid "Pausing"
+
+Hi there,
+
+
+To optimize cloud resources, we automatically pause free-tier projects after 7 days of inactivity.
+
+Your project fast accounts project (ID: jtgzslsfnmzjthgiyjpp) from your organization linduarte has been paused.
+
+You can unpause your project from the dashboard within 90 days. After this period, the project cannot be restored, but your data will remain available for download. View documentation for details.
+
+To prevent future automatic pausing, upgrade to Pro from your billing settings.
+
+## 💤 Preventing Project Pausing (Keep-Alive System)
+
+The Supabase Free Tier automatically pauses projects after 7 days of inactivity. To ensure the application remains always-on, a "Heartbeat" system has been implemented.
+
+### 🛠️ Components
+
+1.  **`keep_alive.py`**: A lightweight script that performs a minimal query to the database to reset the activity timer.
+2.  **`keep_alive.bat`**: A Windows batch file to trigger the script within the `uv` environment.
+3.  **Windows Task Scheduler**: Automates the heartbeat execution.
+
+### ⚙️ Automation Setup
+
+To keep your project active indefinitely, follow these steps:
+
+1.  **Create the Batch File**: Ensure `keep_alive.bat` points to your project directory:
+    ```batch
+    @echo off
+    cd /d "C:\YOUR_PROJECT_PATH\fast-accounts-local"
+    uv run keep_alive.py
+    ```
+2.  **Configure Task Scheduler**:
+    * **Trigger**: Weekly (e.g., every Monday at 10:00 AM).
+    * **Action**: Start a program.
+    * **Program/script**: Path to your `keep_alive.bat`.
+    * **Setting**: Enable "Run task as soon as possible after a scheduled start is missed" to ensure it runs even if the PC was off during the scheduled time.
+
+
+
+### 🔍 Connection Debugging
+If the script returns `[Errno 11001] getaddrinfo failed`, your project is likely already paused. Log in to the Supabase Dashboard and click **Restore** before running the heartbeat script again.
