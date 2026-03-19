@@ -185,3 +185,5 @@ To keep your project active indefinitely, follow these steps:
 
 ### 🔍 Connection Debugging
 If the script returns `[Errno 11001] getaddrinfo failed`, your project is likely already paused. Log in to the Supabase Dashboard and click **Restore** before running the heartbeat script again.
+
+# uv run keep_alive.py to get : Sucesso: Supabase 'cutucado' com sucesso!
