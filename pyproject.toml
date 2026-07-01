@@ -9,5 +9,5 @@ dependencies = [
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
     "pywebview>=6.1",
-    "supabase>=2.27.3",
+    "psycopg[binary]>=3.3.4",
 ]
