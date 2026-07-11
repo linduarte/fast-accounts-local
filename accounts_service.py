@@ -2,10 +2,9 @@
 
 import os
 
-import os
+import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
-import psycopg
 
 # Garante o carregamento do ambiente na leitura do módulo
 load_dotenv()
@@ -23,13 +22,13 @@ class AccountsService:
     def connection_string(self) -> str:
         """Busca a string de conexão e diagnostica o valor real lido pelo Python."""
         url = os.environ.get("DATABASE_URL")
-        
+
         # Esse print vai nos mostrar exatamente o que está chegando aqui
         print(f"\n[DIAGNÓSTICO] O Python leu a DATABASE_URL como: '{url}'\n")
 
         if not url:
             raise ValueError("ERRO CRÍTICO: DATABASE_URL está vazia!")
-            
+
         return url
 
     def _get_connection(self):
@@ -37,7 +36,6 @@ class AccountsService:
         # Agora o self.connection_string vai rodar o método dinâmico acima
         return psycopg.connect(self.connection_string, row_factory=dict_row)
 
-        
     def get_financial_summary(self):
         """Return recurring and non-recurring financial totals by currency.
 
@@ -95,6 +93,28 @@ class AccountsService:
                 inserted_row = cur.fetchone()
                 conn.commit()
                 return inserted_row
+
+    def parse_brazilian_number(self, value):
+        """Parse a Brazilian-formatted number (e.g. '1.234,56') into a float.
+
+        Accepts numeric types or strings. Returns float.
+        """
+        if value is None:
+            raise ValueError("amount cannot be None")
+
+        # If already numeric, just return as float
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        s = str(value).strip()
+
+        # Remove thousands separators (.) and replace decimal comma with dot
+        s = s.replace(".", "").replace(",", ".")
+
+        try:
+            return float(s)
+        except ValueError as exc:
+            raise ValueError(f"Unable to parse Brazilian number from: {value}") from exc
 
     def search_entries(self, query):
         """Search records via partial and case-insensitive matching on service or description."""
