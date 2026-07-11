@@ -2,34 +2,42 @@
 
 import os
 
-import psycopg
+import os
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
+import psycopg
 
+# Garante o carregamento do ambiente na leitura do módulo
 load_dotenv()
 
 
 class AccountsService:
-    """Service to interact with the accounts PostgreSQL table."""
+    """Service class for managing bank account data layers."""
 
     def __init__(self):
-        # String de conexão padrão do Postgres/Neon vinda do ambiente
-        self.connection_string = os.environ.get("DATABASE_URL") or ""
+        # Em vez de fixar uma string imutável na inicialização,
+        # usamos uma propriedade dinâmica para buscar sempre direto do ambiente atualizado
+        self._connection_string = None
+
+    @property
+    def connection_string(self) -> str:
+        """Busca a string de conexão e diagnostica o valor real lido pelo Python."""
+        url = os.environ.get("DATABASE_URL")
+        
+        # Esse print vai nos mostrar exatamente o que está chegando aqui
+        print(f"\n[DIAGNÓSTICO] O Python leu a DATABASE_URL como: '{url}'\n")
+
+        if not url:
+            raise ValueError("ERRO CRÍTICO: DATABASE_URL está vazia!")
+            
+        return url
 
     def _get_connection(self):
-        """Helper connection context manager with dictionary row output."""
-        if not self.connection_string:
-            raise ValueError("DATABASE_URL environment variable is missing.")
-       # Conexão direta e limpa usando Psycopg 3
+        """Creates and returns a new connection to the PostgreSQL backend."""
+        # Agora o self.connection_string vai rodar o método dinâmico acima
         return psycopg.connect(self.connection_string, row_factory=dict_row)
-    def parse_brazilian_number(self, value):
-        """Parse a Brazilian-formatted number string into a float."""
-        if isinstance(value, str):
-            # Converts "1.585,43" to 1585.43
-            clean_value = value.replace(".", "").replace(",", ".")
-            return float(clean_value)
-        return float(value)
 
+        
     def get_financial_summary(self):
         """Return recurring and non-recurring financial totals by currency.
 
