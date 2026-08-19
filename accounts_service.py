@@ -13,35 +13,25 @@ load_dotenv()
 class AccountsService:
     """Service class for managing bank account data layers."""
 
-    def __init__(self):
-        # Em vez de fixar uma string imutável na inicialização,
-        # usamos uma propriedade dinâmica para buscar sempre direto do ambiente atualizado
+    def __init__(self) -> None:
         self._connection_string = None
 
     @property
     def connection_string(self) -> str:
-        """Busca a string de conexão e diagnostica o valor real lido pelo Python."""
+        """Busca a string de conexão diretamente do ambiente de forma segura."""
         url = os.environ.get("DATABASE_URL")
 
-        # Esse print vai nos mostrar exatamente o que está chegando aqui
-        print(f"\n[DIAGNÓSTICO] O Python leu a DATABASE_URL como: '{url}'\n")
-
         if not url:
-            raise ValueError("ERRO CRÍTICO: DATABASE_URL está vazia!")
+            raise ValueError("ERRO CRÍTICO: DATABASE_URL está vazia no arquivo .env!")
 
         return url
 
     def _get_connection(self):
         """Creates and returns a new connection to the PostgreSQL backend."""
-        # Agora o self.connection_string vai rodar o método dinâmico acima
         return psycopg.connect(self.connection_string, row_factory=dict_row)
 
-    def get_financial_summary(self):
-        """Return recurring and non-recurring financial totals by currency.
-
-        Optimized to perform a single grouped query instead of 4 separate calls.
-        """
-        # Estrutura inicial padrão para garantir consistência mesmo se o banco estiver vazio
+    def get_financial_summary(self) -> dict:
+        """Return recurring and projected annual financial totals by currency."""
         summary = {
             "BRL": {"monthly": 0.0, "annual": 0.0},
             "USD": {"monthly": 0.0, "annual": 0.0},
@@ -59,16 +49,32 @@ class AccountsService:
                 cur.execute(query)
                 results = cur.fetchall()
 
-        # Mapeia o resultado agrupado direto na estrutura esperada pela sua interface
         for row in results:
             currency = row["currency"]
-            # is_recurring True mapeia para 'monthly', False mapeia para 'annual'
-            period_key = "monthly" if row["is_recurring"] else "annual"
-            summary[currency][period_key] = float(row["total"])
+            total = float(row["total"])
+
+            if currency not in summary:
+                continue
+
+            if row["is_recurring"]:
+                # Soma o valor no mensal e projeta o ciclo de 12 meses no ano
+                summary[currency]["monthly"] += total
+                summary[currency]["annual"] += total * 12
+            else:
+                # Cobranças avulsas/anuais entram diretamente no total anual
+                summary[currency]["annual"] += total
 
         return summary
 
-    def save_entry(self, amount, currency, service, description, username, recurring):
+    def save_entry(
+        self,
+        amount: str | float | int,
+        currency: str,
+        service: str,
+        description: str,
+        username: str,
+        recurring: bool,
+    ) -> dict:
         """Insert a new financial log and return the created record."""
         query = """
             INSERT INTO accounts (amount, currency, service, description, username, is_recurring)
@@ -94,7 +100,7 @@ class AccountsService:
                 conn.commit()
                 return inserted_row
 
-    def parse_brazilian_number(self, value):
+    def parse_brazilian_number(self, value: str | float | int) -> float:
         """Parse a Brazilian-formatted number (e.g. '1.234,56') into a float.
 
         Accepts numeric types or strings. Returns float.
@@ -102,21 +108,20 @@ class AccountsService:
         if value is None:
             raise ValueError("amount cannot be None")
 
-        # If already numeric, just return as float
         if isinstance(value, (int, float)):
             return float(value)
 
         s = str(value).strip()
-
-        # Remove thousands separators (.) and replace decimal comma with dot
         s = s.replace(".", "").replace(",", ".")
 
         try:
             return float(s)
         except ValueError as exc:
-            raise ValueError(f"Unable to parse Brazilian number from: {value}") from exc
+            raise ValueError(
+                f"Unable to parse Brazilian number from: {value}"
+            ) from exc
 
-    def search_entries(self, query):
+    def search_entries(self, query: str) -> list[dict]:
         """Search records via partial and case-insensitive matching on service or description."""
         sql_query = """
             SELECT * FROM accounts
@@ -131,5 +136,5 @@ class AccountsService:
                 return cur.fetchall()
 
 
-# Create the instance
+# Singleton instance
 accounts_service = AccountsService()
