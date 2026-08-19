@@ -5,7 +5,6 @@ from nicegui import ui
 from accounts_service import accounts_service
 
 
-
 class FinanceApp:
     """Main application class for managing financial logs and summaries."""
 
